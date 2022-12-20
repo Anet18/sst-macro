@@ -114,6 +114,7 @@ nobase_library_include_HEADERS += \
   topology/coordinates.h \
   topology/cartesian_topology.h \
   topology/star.h \
+  topology/rrg.h \
   topology/structured_topology.h \
   topology/traffic/traffic.h \
   router/router.h \
@@ -164,6 +165,7 @@ libsstmac_hw_la_SOURCES +=  \
   topology/fat_tree.cc \
   topology/file.cc \
   topology/torus.cc \
+  topology/rrg.cc \
   topology/hypercube.cc \
   topology/coordinates.cc \
   topology/traffic/traffic.cc \
@@ -177,6 +179,7 @@ libsstmac_hw_la_SOURCES +=  \
   router/hypercube_routing.cc \
   router/cascade_routing.cc \
   router/torus_routing.cc \
+  router/rrg_routing.cc \
   topology/star.cc \
   topology/structured_topology.cc \
   topology/cartesian_topology.cc \
