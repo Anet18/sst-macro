@@ -115,6 +115,7 @@ nobase_library_include_HEADERS += \
   topology/cartesian_topology.h \
   topology/star.h \
   topology/rrg.h \
+  topology/dfly_group_wiring.h \
   topology/structured_topology.h \
   topology/traffic/traffic.h \
   router/router.h \
@@ -166,6 +167,7 @@ libsstmac_hw_la_SOURCES +=  \
   topology/file.cc \
   topology/torus.cc \
   topology/rrg.cc \
+  topology/dfly_group_wiring.cc \
   topology/hypercube.cc \
   topology/coordinates.cc \
   topology/traffic/traffic.cc \
