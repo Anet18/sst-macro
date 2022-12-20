@@ -1,57 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2017 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
-
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, 
-are permitted provided that the following conditions are met:
-
-    * Redistributions of source code must retain the above copyright
-      notice, this list of conditions and the following disclaimer.
-
-    * Redistributions in binary form must reproduce the above
-      copyright notice, this list of conditions and the following
-      disclaimer in the documentation and/or other materials provided
-      with the distribution.
-
-    * Neither the name of the copyright holder nor the names of its
-      contributors may be used to endorse or promote products derived
-      from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Questions? Contact sst-macro-help@sandia.gov
-*/
-/**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
-retains certain rights in this software.
-
-Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
-Energy's National Nuclear Security Administration under contract DE-NA0003525.
-
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2017, NTESS
 
 All rights reserved.
 
@@ -89,7 +46,13 @@ Questions? Contact sst-macro-help@sandia.gov
 #define SSTMAC_HARDWARE_NETWORK_TOPOLOGY_dragonfly_plus_H_INCLUDED
 
 #include <sstmac/hardware/topology/dragonfly.h>
+#include <sstmac/hardware/topology/dfly_group_wiring.h>
 
+#define MAX_ROUTER 2200
+#define MAX_PORT 64
+
+typedef int (*mytype)[MAX_ROUTER][MAX_PORT];
+typedef double (*mytype1)[MAX_ROUTER][MAX_PORT];
 namespace sstmac {
 namespace hw {
 
@@ -109,7 +72,60 @@ class DragonflyPlus : public Dragonfly
     "implements a Dragonfly+ with fat-tree groups")
 
   DragonflyPlus(SST::Params& params);
+  /* ......................... */
+   int all_link_state1[MAX_ROUTER][MAX_PORT]={{0}};
+   double  all_link_state_timestamp[MAX_ROUTER][MAX_PORT]={{0.0}};
+   int cc = 0;
+   long long int x13=0;
+   long long int y13=0;
+   long long int z13=0;
+   long long int w13=0;
+    mytype global_array()
+    {
+       mytype p = &all_link_state1;
+       return p;
+    }
 
+    mytype1 global_timestamp_array()
+    {
+       mytype1 p = &all_link_state_timestamp;
+       return p;
+    }
+
+    long long int* total_minimal_path()
+    {
+         long long int *x1=&x13;
+         return x1;
+    }
+    long long int* total_non_minimal_path()
+    {
+         long long int *y1=&y13;
+         return y1;
+    }
+	long long int* total_local_up_path()
+    {
+         long long int *z1=&z13;
+         return z1;
+    }
+	long long int* total_local_down_path()
+    {
+         long long int *w1=&w13;
+         return w1;
+    }
+   
+  /*
+   void initialize_array(){
+   int ii;
+   for (ii=0; ii<2200; ii++){
+         all_link_state[ii] = (int *) malloc(64 * sizeof(int));
+     }
+   for (ii=0; ii<2200; ii++){
+       for(int j=0;j<64;j++)
+         all_link_state[ii][j]=0;     }
+
+   }*/
+   
+  /*..........................*/
   std::string toString() const override {
     return "dragonfly+";
   }
@@ -120,9 +136,13 @@ class DragonflyPlus : public Dragonfly
 
   void connectedOutports(SwitchId src, std::vector<Connection>& conns) const override;
 
-  ~DragonflyPlus() override {}
-
-  std::string portTypeName(SwitchId sid, int port) const override;
+  virtual ~DragonflyPlus()
+  {
+	  top_debug("Total Number of Global Minimal Path = %lld",x13);
+	  top_debug("Total Number of Global Non-Minimal Path = %lld",y13);
+	  top_debug("Total Number of Local Up Path = %lld",z13);
+	  top_debug("Total Number of Local Down Path = %lld",w13);
+  }
 
   VTKSwitchGeometry getVtkGeometry(SwitchId sid) const override;
 
@@ -173,7 +193,7 @@ class DragonflyPlus : public Dragonfly
     return num_leaf_switches_;
   }
 
-  bool isCurvedVtkLink(SwitchId  /*sid*/, int  /*port*/) const override {
+  bool isCurvedVtkLink(SwitchId sid, int port) const override {
     return false;
   }
 

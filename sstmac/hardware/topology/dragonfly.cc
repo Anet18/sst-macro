@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2018 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2018, NTESS
 
 All rights reserved.
 
@@ -43,6 +43,7 @@ Questions? Contact sst-macro-help@sandia.gov
 */
 
 #include <sstmac/hardware/topology/dragonfly.h>
+#include <sstmac/hardware/topology/dfly_group_wiring.h>
 #include <sstmac/hardware/router/router.h>
 #include <math.h>
 #include <sstream>
@@ -52,14 +53,6 @@ Questions? Contact sst-macro-help@sandia.gov
 #include <sprockit/keyword_registration.h>
 #include <sprockit/sim_parameters.h>
 
-#define modulo(a,b) ((a)%(b) + (b))%(b)
-
-static inline int mod(int a, int b){
-  int rem = a % b;
-  return rem < 0 ? rem + b : rem;
-}
-
-
 RegisterKeywords(
 { "h", "the number inter-group connections per router" },
 { "group_connections", "the number of inter-group connections per router"},
@@ -68,6 +61,8 @@ RegisterKeywords(
 
 namespace sstmac {
 namespace hw {
+
+static const double PI = 3.141592653589793238462;
 
 Dragonfly::Dragonfly(SST::Params& params) :
   CartesianTopology(params)
@@ -139,18 +134,6 @@ Dragonfly::minimalDistance(SwitchId src, SwitchId dst) const
   }
 }
 
-std::string
-Dragonfly::portTypeName(SwitchId  /*sid*/, int port) const
-{
-  if (port < a_){
-    return "intra";
-  } else if (port < (a_ + h_)){
-    return "global";
-  } else {
-    return "injection";
-  }
-}
-
 void
 Dragonfly::connectedOutports(SwitchId src, std::vector<Connection>& conns) const
 {
@@ -196,7 +179,7 @@ Dragonfly::connectedOutports(SwitchId src, std::vector<Connection>& conns) const
 }
 
 bool
-Dragonfly::isCurvedVtkLink(SwitchId  /*sid*/, int port) const
+Dragonfly::isCurvedVtkLink(SwitchId sid, int port) const
 {
   if (port >= a_){
     return false; //global link - these are straight lines
@@ -281,326 +264,6 @@ Dragonfly::getVtkGeometry(SwitchId sid) const
   return geom;
 }
 
-void
-Dragonfly::portConfigDump(const std::string &dump_file)
-{
-  std::ofstream ofs(dump_file);
-  int num_switches = numSwitches();
-  std::vector<Connection> net_ports;
-  std::vector<InjectionPort> inj_ports;
-
-  ofs << "component,port,destination,inport,level,type";
-  for (int i=0; i < num_switches; ++i){
-    connectedOutports(i, net_ports);
-    int srcG = computeG(i);
-    for (Connection& conn : net_ports){
-      ofs << "\n" << switchIdToName(i)
-          << "," << conn.src_outport
-          << "," << switchIdToName(conn.dst)
-          << "," << conn.dst_inport;
-      int dstG = computeG(conn.dst);
-      if (srcG == dstG){
-        ofs << ",1," << "intra";
-      } else {
-        ofs << ",2," << "global";
-      }
-    }
-    endpointsConnectedToInjectionSwitch(i, inj_ports);
-    for (InjectionPort& port : inj_ports){
-      ofs << "\n" << switchIdToName(i)
-          << "," << port.switch_port
-          << "," << nodeIdToName(port.nid)
-          << "," << port.ep_port
-          << ",0,ejection";
-      ofs << "\n" << nodeIdToName(port.nid)
-          << ",0"
-          << "," << switchIdToName(i)
-          << "," << port.switch_port
-          << ",0,injection";
-    }
-  }
-  ofs.close();
-}
-
-InterGroupWiring::InterGroupWiring(SST::Params&  /*params*/, int a, int g, int h) :
-  a_(a), g_(g), h_(h)
-{
-}
-
-SwitchId
-InterGroupWiring::randomIntermediate(Router* rtr, SwitchId current_sw, SwitchId dest_sw, uint32_t seed)
-{
-  int srcA = current_sw % g_;
-  int srcG = current_sw / g_;
-  int dstA = dest_sw % g_;
-  int dstG = dest_sw / g_;
-  uint32_t attempt = 0;
-  if (srcG == dstG){
-    int interA = srcA;
-    while (interA == srcA || interA == dstA){
-      interA = rtr->randomNumber(a_, attempt, seed);
-      ++attempt;
-    }
-    return srcG*a_ + interA;
-  } else {
-    int interA = rtr->randomNumber(a_, attempt, seed);
-    int interG = srcG;
-    while (interG == srcG || interG == dstG){
-      interG = rtr->randomNumber(g_, attempt, seed);
-      ++attempt;
-    }
-    return interG*a_ + interA;
-  }
-}
-
-class SingleLinkGroupWiring : public InterGroupWiring
-{
- public:
-  SPKT_REGISTER_DERIVED(
-    InterGroupWiring,
-    SingleLinkGroupWiring,
-    "macro",
-    "single",
-    "wiring with only one group link on each switch")
-
-  SingleLinkGroupWiring(SST::Params& params, int a, int g, int h) :
-    InterGroupWiring(params, a, g, h)
-  {
-    if (h_ != 1){
-      spkt_abort_printf("h must be 1 for single link inter-group pattern");
-    }
-  }
-
-  int inputGroupPort(int  /*srcA*/, int  /*srcG*/, int srcH, int  /*dstA*/, int  /*dstG*/) const override {
-    if (srcH != 0){
-      spkt_abort_printf("h must be 1 for single link inter-group pattern");
-    }
-    return 0;
-  }
-
-  /**
-   * @brief connected_routers
-   * @param a The src router index within the group
-   * @param g The src router group
-   * @param connected [in-out] The routers (switch id) for each inter-group interconnection
-   * @return The number of routers in connected array
-   */
-  void connectedRouters(int srcA, int srcG, std::vector<int>& connected) const override {
-    int plusMinus = 1 - 2*(srcA%2);
-    int deltaG = (1 + srcA/2)*plusMinus;
-    int deltaA = plusMinus;
-    //if there is an odd number in the group, the "odd" router out
-    //connects to its equivalent in the other groups
-    int aMax = a_ - 1;
-    if ( (a_%2) && (srcA == aMax) ){
-      deltaA = 0;
-    }
-    connected.resize(1);
-    int dstG = modulo(srcG + deltaG, g_); 
-    int dstA = modulo(srcA + deltaA, a_);
-    SwitchId dst = dstG*a_ + dstA;
-    connected[0] = dst;
-  }
-
-  /**
-   * @brief connected_to_group
-   * @param srcG
-   * @param dstG
-   * @param connected [in-out] The list of all intra-group routers in range (0 ... a-1)
-   *                  that have connections to a router in group dstG. The second entry in the pair
-   *                  is the "port offset", a unique index for the group link
-   * @return The number of routers in group srcG with connections to dstG
-   */
-  void connectedToGroup(int srcG, int dstG, std::vector<std::pair<int,int>>& connected) const override {
-    connected.resize(1);
-    for (int a=0; a < a_; ++a){
-      int plusMinus = 1 - 2*(a%2);
-      int deltaG = (1 + a/2)*plusMinus;
-      int testG = (srcG + deltaG + g_) % g_;
-      if (testG == dstG){
-        connected[0] = std::make_pair(a,0);
-      }
-    }
-  }
-
-};
-
-class CirculantGroupWiring : public InterGroupWiring
-{
- public:
-  SPKT_REGISTER_DERIVED(
-    InterGroupWiring,
-    CirculantGroupWiring,
-    "macro",
-    "circulant",
-    "wiring with circulant pattern")
-
-  CirculantGroupWiring(SST::Params& params, int a, int g, int h) :
-    InterGroupWiring(params, a, g, h)
-  {
-    if (h_ % 2){
-      spkt_abort_printf("group connections must be even for circulant inter-group pattern");
-    }
-  }
-
-  int inputGroupPort(int  /*srcA*/, int  /*srcG*/, int srcH, int  /*dstA*/, int  /*dstG*/) const override {
-    if (srcH % 2 == 0){
-      return srcH + 1;
-    } else {
-      return srcH - 1;
-    }
-  }
-
-  /**
-   * @brief connected_routers
-   * @param a The src router index within the group
-   * @param g The src router group
-   * @param connected [in-out] The routers (switch id) for each inter-group interconnection
-   * @return The number of routers in connected array
-   */
-  void connectedRouters(int srcA, int srcG, std::vector<int>& connected) const override {
-    connected.clear();
-    int dstA = srcA;
-    int half = h_  /2;
-    for (int h=1; h <= half; ++h){
-      int plusG = mod(srcG + srcA*half + h, g_);
-      if (plusG != srcG){
-        SwitchId dst = plusG*a_ + dstA;
-        connected.push_back(dst); //full switch ID
-      }
-      int minusG = mod(srcG - srcA*half - h, g_);
-      if (minusG != srcG){
-        SwitchId dst = minusG*a_ + dstA;
-        connected.push_back(dst); //full switch ID
-      }
-    }
-  }
-
-  /**
-   * @brief connected_to_group
-   * @param srcG
-   * @param dstG
-   * @param connected [in-out] The list of all intra-group routers in range (0 ... a-1)
-   *                  that have connections to a router in group dstG. The second entry in the pair
-   *                  is the "port offset", a unique index for the group link
-   * @return The number of routers in group srcG with connections to dstG
-   */
-  void connectedToGroup(int srcG, int dstG, std::vector<std::pair<int,int>>& connected) const override {
-    connected.clear();
-    std::vector<int> tmp;
-    for (int a=0; a < a_; ++a){
-      connectedRouters(a, srcG, tmp);
-      for (int c=0; c < tmp.size(); ++c){
-        int g = tmp[c] / a_;
-        if (dstG == g){
-          connected.emplace_back(a,c);
-          break;
-        }
-      }
-    }
-  }
-
-};
-
-class AllToAllGroupWiring : public InterGroupWiring
-{
- public:
-  SPKT_REGISTER_DERIVED(
-    InterGroupWiring,
-    AllToAllGroupWiring,
-    "macro",
-    "alltoall",
-    "wiring with every switch having connection to every group")
-
-  AllToAllGroupWiring(SST::Params& params, int a, int g, int h) :
-    InterGroupWiring(params, a, g, h)
-  {
-    covering_ = h_ / (g_-1);
-    if (covering_ == 0){
-      spkt_abort_printf("Group connections h=%d is not able to provide all-to-all covering for g=%d",
-                        h_, g_);
-    }
-
-    stride_ = a_ / covering_;
-
-    top_debug("alltoall links cover groups %dx with stride=%d", covering_, stride_);
-
-    if (h_ % (g_-1)) spkt_abort_printf("dragonfly #groups-1=%d must evenly divide #group_connections=%d", g_-1, h_);
-    if (a_ % covering_) spkt_abort_printf("dragonfly covering=%d must evenly divide group_size=%d", covering_, a_);
-  }
-
-  int inputGroupPort(int srcA, int srcG, int  /*srcH*/, int dstA, int dstG) const override {
-    int deltaA = modulo(srcA - dstA,a_); //mod arithmetic in case srcA < dstA
-    int offset = deltaA / stride_;
-    if (srcG < dstG){
-      return srcG*covering_ + offset;
-    } else {
-      return (srcG - 1)*covering_ + offset;
-    }
-  }
-
-  /**
-   * @brief connected_routers
-   * @param a The src router index within the group
-   * @param g The src router group
-   * @param connected [in-out] The routers (switch id) for each inter-group interconnection
-   * @return The number of routers in connected array
-   */
-  void connectedRouters(int srcA, int srcG, std::vector<int>& connected) const override {
-    connected.clear();
-    for (int g=0; g < g_; ++g){
-      if (g == srcG) continue;
-      for (int c=0; c < covering_; ++c){
-        int dstA = (srcA + stride_*c) % a_;
-        int dst = g*a_ + dstA;
-        connected.push_back(dst);
-      }
-    }
-  }
-
-  SwitchId randomIntermediate(Router* rtr, SwitchId current_sw, SwitchId dest_sw, uint32_t seed) override
-  {
-    int srcG = current_sw / a_;
-    int dstG = dest_sw / a_;
-    uint32_t attempt = 0;
-    if (srcG == dstG){
-      return InterGroupWiring::randomIntermediate(rtr, current_sw, dest_sw, seed);
-    } else {
-      int srcA = current_sw % a_;
-      int interG = rtr->randomNumber(g_, attempt, seed);
-      while (interG == srcG || interG == dstG){
-        interG = rtr->randomNumber(g_, attempt, seed);
-      }
-      //go to a router directly connected to srcA
-      int srcH = rtr->randomNumber(h_, attempt, seed);
-      int interA = (srcH * stride_ + srcA) % a_;
-      return interG*a_ + interA;
-    }
-  }
-
-  /**
-   * @brief connected_to_group
-   * @param srcG
-   * @param dstG
-   * @param connected [in-out] The list of all intra-group routers in range (0 ... a-1)
-   *                  that have connections to a router in group dstG. The second entry in the pair
-   *                  is the "port offset", a unique index for the group link
-   * @return The number of routers in group srcG with connections to dstG
-   */
-  void connectedToGroup(int  /*srcG*/, int dstG, std::vector<std::pair<int,int>>& connected) const override {
-    connected.clear();
-    for (int a=0; a < a_; ++a){
-      int offset = dstG * covering_;
-      for (int c=0; c < covering_; ++c){
-        connected.emplace_back(a, offset+c);
-      }
-    }
-  }
-
- private:
-  int covering_;
-  int stride_;
-};
 
 
 }
