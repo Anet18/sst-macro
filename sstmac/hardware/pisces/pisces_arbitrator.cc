@@ -1,14 +1,14 @@
 /**
-Copyright 2009-2022 National Technology and Engineering Solutions of Sandia,
-LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S. Government
+Copyright 2009-2018 National Technology and Engineering Solutions of Sandia, 
+LLC (NTESS).  Under the terms of Contract DE-NA-0003525, the U.S.  Government 
 retains certain rights in this software.
 
 Sandia National Laboratories is a multimission laboratory managed and operated
-by National Technology and Engineering Solutions of Sandia, LLC., a wholly
-owned subsidiary of Honeywell International, Inc., for the U.S. Department of
+by National Technology and Engineering Solutions of Sandia, LLC., a wholly 
+owned subsidiary of Honeywell International, Inc., for the U.S. Department of 
 Energy's National Nuclear Security Administration under contract DE-NA0003525.
 
-Copyright (c) 2009-2022, NTESS
+Copyright (c) 2009-2018, NTESS
 
 All rights reserved.
 
@@ -43,38 +43,30 @@ Questions? Contact sst-macro-help@sandia.gov
 */
 
 #include <sstmac/hardware/pisces/pisces_arbitrator.h>
-#include <unusedvariablemacro.h>
 
 #include <math.h>
 
 #define one_indent "  "
 #define two_indent "    "
 
-#if PISCES_DEBUG_INDIVIDUAL_HISTORY
-#define dprintf(flag, ...) \
-  history_.push_back(sprockit::sprintf(__VA_ARGS__))
-#else
-#define dprintf(flag, ...) debug_printf(flag, __VA_ARGS__)
-#endif
-
-#if PISCES_DETAILED_DEBUG
+#if 0
 #define pflow_arb_debug_printf_l0(format_str, ...) \
-  dprintf(sprockit::dbg::pisces,  \
+  debug_printf(sprockit::dbg::pisces,  \
     " [arbitrator] " format_str , \
     __VA_ARGS__)
 
 #define pflow_arb_debug_printf_l1(format_str, ...) \
-  dprintf(sprockit::dbg::pisces,  \
+  debug_printf(sprockit::dbg::pisces,  \
     one_indent " [arbitrator] " format_str , \
     __VA_ARGS__)
 
 #define pflow_arb_debug_printf_l2(format_str, ...) \
-  dprintf(sprockit::dbg::pisces,  \
+  debug_printf(sprockit::dbg::pisces,  \
     two_indent " [arbitrator] " format_str , \
     __VA_ARGS__)
 
 #define pflow_arb_debug_print_l2(format_str) \
-  dprintf(sprockit::dbg::pisces,  \
+  debug_printf(sprockit::dbg::pisces,  \
     two_indent " [arbitrator] " format_str "%s", "")
 #else
 #define pflow_arb_debug_printf_l0(format_str, ...)
@@ -97,15 +89,27 @@ Questions? Contact sst-macro-help@sandia.gov
 namespace sstmac {
 namespace hw {
 
+static void
+validate_bw(double test_bw)
+{
+  int sss=0;
+  if (test_bw < 0 || (test_bw != test_bw)){ //i.e. NAN
+    spkt_throw_printf(sprockit::ValueError,
+        "Payload has invalid bandwidth %12.8e",
+        test_bw);
+  }
+}
+
 PiscesBandwidthArbitrator::
 PiscesBandwidthArbitrator(double bw)
 {
+  validate_bw(bw);
   byteDelay_ = TimeDelta(1.0/bw);
 }
 
 PiscesSimpleArbitrator::PiscesSimpleArbitrator(double bw) :
-  PiscesBandwidthArbitrator(bw),
-  next_free_()
+  next_free_(),
+  PiscesBandwidthArbitrator(bw)
 {
 }
 
@@ -113,9 +117,13 @@ void
 PiscesSimpleArbitrator::arbitrate(IncomingPacket &st)
 {
   Timestamp start_send = next_free_ < st.now ? st.now : next_free_;
+  TimeDelta arrive_delay = st.pkt->byteLength() * st.pkt->byteDelay();
   TimeDelta output_delay = st.pkt->byteLength() * byteDelay_;
   next_free_ = start_send + output_delay;
   st.pkt->initByteDelay(byteDelay_);
+  TimeDelta creditDelay = output_delay > arrive_delay
+        ? output_delay - arrive_delay //if going out slower, delay credit
+        : TimeDelta();
 
   //store and forward
   //head/tail are linked and go "at same time"
@@ -139,19 +147,19 @@ PiscesNullArbitrator::headTailDelay(PiscesPacket *pkt)
 void
 PiscesNullArbitrator::arbitrate(IncomingPacket &st)
 {
-  SSTMAC_MAYBE_UNUSED PiscesPacket* payload = st.pkt;
+  PiscesPacket* payload = st.pkt;
   pflow_arb_debug_printf_l0("Null: starting packet %p:%llu of size %u with byte_delay=%9.5e epoch_delay=%9.5e: %s",
                             payload, payload->flowId(),
                             payload->numBytes(), payload->byteDelay().sec(), byteDelay_.sec());
   TimeDelta byteDelay = std::max(byteDelay_, st.pkt->byteDelay());
   st.pkt->setByteDelay(byteDelay_);
   TimeDelta actual_delay = st.pkt->numBytes() * byteDelay;
-#if SSTMAC_SANITY_CHECK
   TimeDelta min_delay = st.pkt->numBytes() * byteDelay_;
+//#if SSTMAC_SANITY_CHECK
   if (actual_delay < min_delay){
     spkt_abort_printf("null arbitrator computed bad delay");
   }
-#endif
+//#endif
   st.head_leaves = st.now;
   st.tail_leaves = st.now + actual_delay;
   st.pkt->setByteDelay(byteDelay);
@@ -162,12 +170,14 @@ PiscesNullArbitrator::arbitrate(IncomingPacket &st)
 
 PiscesCutThroughArbitrator::
 PiscesCutThroughArbitrator(double bw)
-  : PiscesBandwidthArbitrator(bw),
-    head_(nullptr)
+  : head_(nullptr),
+    PiscesBandwidthArbitrator(bw)
 {
   cycleLength_ = byteDelay_;
   head_ = Epoch::allocateAtBeginning();
   head_->numCycles = std::numeric_limits<uint32_t>::max();
+  //Atiq
+  //head_->numCycles = std::numeric_limits<size_t>::max();
 }
 
 
@@ -195,10 +205,6 @@ PiscesCutThroughArbitrator::clearOut(Timestamp now)
     cut_through_epoch_debug("clearing at %9.5e", now.sec());
     Timestamp end = epoch->start + epoch->numCycles * cycleLength_;
     if (now <= epoch->start){
-      if (!epoch->next){
-        //this is the last epoch, restore it to full size
-        epoch->numCycles = std::numeric_limits<uint32_t>::max();
-      }
       return;
     } else if (now < end){
       if (epoch->next){
@@ -216,16 +222,6 @@ PiscesCutThroughArbitrator::clearOut(Timestamp now)
         Epoch* next = epoch->next;
         delete epoch;
         head_ = next;
-#if SSTMAC_SANITY_CHECK
-        if (head_ == nullptr){
-#if PISCES_DEBUG_INDIVIDUAL_HISTORY
-          for (auto& str : history_){
-            std::cerr << str << std::endl;
-          }
-#endif
-          spkt_abort_printf("internal error: head epoch is null in PiscesCutThroughArbitrator");
-        }
-#endif
         epoch = next;
       } else {
         //this is the last epoch - restore it to "full size"
@@ -235,35 +231,41 @@ PiscesCutThroughArbitrator::clearOut(Timestamp now)
       }
     }
   }
+
 }
 
 PiscesCutThroughArbitrator::Epoch*
 PiscesCutThroughArbitrator::advance(Epoch* epoch, Epoch* prev)
 {
-  Epoch* next = epoch->next;
-  if (prev) prev->next = epoch->next;
-  else head_ = next;
-  delete epoch;
-#if SSTMAC_SANITY_CHECK
-  if (head_ == nullptr){
-  #if PISCES_DEBUG_INDIVIDUAL_HISTORY
-    for (auto& str : history_){
-      std::cerr << str << std::endl;
-    }
-  #endif
-    spkt_abort_printf("internal error: head epoch is null in PiscesCutThroughArbitrator");
+  if(epoch->next){
+    Epoch* next = epoch->next;
+    if (prev) prev->next = epoch->next;
+    else head_ = next;
+    delete epoch;
+    return next;
+  }else{
+    epoch->numCycles = std::numeric_limits<uint32_t>::max();   
+    //epoch->start = now;
+    return epoch;  
   }
-#endif
-  return next;
+
+
+//  Epoch* next = epoch->next;
+//  if (prev) prev->next = epoch->next;
+//  else head_ = next;
+//  delete epoch;
+//  return next;
+
 }
 
 void
 PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
 {
+  PiscesPacket* payload = st.pkt;
   pflow_arb_debug_printf_l0("Cut-through: arbitrator %p starting packet %p:%llu of size %u with byte_delay=%9.5e epoch_delay=%9.5e start=%9.5e: %s",
                           this, st.pkt, st.pkt->flowId(), st.pkt->numBytes(), st.pkt->byteDelay().sec(),
                           byteDelay_.sec(), st.now.sec(),
-                          (st.pkt->flow() ? sprockit::toString(st.pkt->flow()).c_str() : "null payload"));
+                          (st.pkt->orig() ? sprockit::toString(st.pkt->orig()).c_str() : "null payload"));
 
 #define PRINT_EPOCHS 0
 #if PRINT_EPOCHS
@@ -276,39 +278,47 @@ PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
   std::cout << "------" << std::endl;
 #endif
 
+    if (!head_){
+      spkt_abort_printf("1. BEFORE CLEAROUT! ran out of epochs on arbitrator %p: this should not be possible", this);
+    }
   clearOut(st.now);
+
 
   Timestamp fullyBufferedTime = st.now + st.pkt->byteDelay() * st.pkt->numBytes();
   Epoch* epoch = head_;
+
+
+
   Epoch* prev = nullptr;
   uint32_t bytesSent = 0;
   uint32_t bytesLeft = st.pkt->numBytes();
   //first idle epoch
   st.head_leaves = epoch->start;
+
+
+  int count=0;
   while (bytesLeft > 2){ //we often end up with 1,2 byte stragglers - ignore them for efficiency
-#if SSTMAC_SANITY_CHECK
+    count++;
+//#if SSTMAC_SANITY_CHECK
     if (!epoch){
-#if PISCES_DEBUG_INDIVIDUAL_HISTORY
-      for (auto& str : history_){
-        std::cerr << str << std::endl;
-      }
-#endif
       spkt_abort_printf("ran out of epochs on arbitrator %p: this should not be possible", this);
     }
-#endif
+//#endif
     TimeDelta epochLength = epoch->numCycles * cycleLength_;
     Timestamp epochEnd = epoch->start + epochLength;
     if (st.pkt->byteDelay() <= cycleLength_){
       //every cycle gets used, arriving faster than leaving
       if (epoch->numCycles <= bytesLeft){
-        cut_through_arb_debug_noargs("used all cycles");
+        cut_through_arb_debug_noargs("used all cycles")
         //epoch is completely busy
         bytesSent += epoch->numCycles;
         bytesLeft -= epoch->numCycles;
         epoch = advance(epoch, prev);
         st.tail_leaves = epochEnd;
       } else {
+
         //epoch has to split into busy and idle halves
+
         cut_through_arb_debug_noargs("truncating and finishing");
         epoch->start += bytesLeft * cycleLength_;
         epoch->numCycles -= bytesLeft;
@@ -318,6 +328,7 @@ PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
       }
     } else {
       //we do not have all the bytes here yet
+
       if (fullyBufferedTime >= epochEnd){
         uint32_t bytesArrived = (epochEnd - st.now) / st.pkt->byteDelay();
         uint32_t bytesBuffered = std::min(bytesLeft, bytesArrived - bytesSent);
@@ -356,6 +367,7 @@ PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
       } else {
         //buffering finishes in the middle of the epoch
         //split the epochs on buffering finishing and repeat
+
         Epoch* next = new Epoch;
         TimeDelta deltaT = fullyBufferedTime - epoch->start;
         uint32_t preCycles = deltaT  / cycleLength_;
@@ -378,10 +390,11 @@ PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
     }
   }
 
+
   TimeDelta newByteDelay = (st.tail_leaves - st.head_leaves) / st.pkt->numBytes();
   st.pkt->setByteDelay(newByteDelay);
 
-#if SSTMAC_SANITY_CHECK
+//#if SSTMAC_SANITY_CHECK
   Epoch* end_ep = head_;
   Timestamp end_last;
   while(end_ep){
@@ -399,17 +412,17 @@ PiscesCutThroughArbitrator::arbitrate(IncomingPacket &st)
     end_last = end_ep->start;
     end_ep = end_ep->next;
   }
-#endif
+//#endif
 
   pflow_arb_debug_printf_l0("Cut-through: arbitrator %p finished packet %p:%llu of size %u with byte_delay=%9.5e epoch_delay=%9.5e head=%9.5e tail=%9.5e",
                           this, st.pkt, st.pkt->flowId(), st.pkt->numBytes(), newByteDelay.sec(), byteDelay_.sec(),
                           st.head_leaves.sec(), st.tail_leaves.sec());
 
-#if SSTMAC_SANITY_CHECK
+//#if SSTMAC_SANITY_CHECK
   if (st.head_leaves > st.tail_leaves){
     spkt_abort_printf("head leaves after tail!");
   }
-#endif
+//#endif
 
 }
 
