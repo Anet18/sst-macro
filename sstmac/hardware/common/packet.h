@@ -52,7 +52,7 @@ Questions? Contact sst-macro-help@sandia.gov
 namespace sstmac {
 namespace hw {
 
-#define MAX_HEADER_BYTES 16
+#define MAX_HEADER_BYTES 64
 #define MAX_CONTROL_BYTES 8
 #define MAX_NIC_BYTES 8
 #define MAX_STAT_BYTES 8
