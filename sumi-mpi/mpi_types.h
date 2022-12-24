@@ -52,6 +52,7 @@ Questions? Contact sst-macro-help@sandia.gov
 #endif
 
 typedef uintptr_t MPI_Aint;
+typedef uintptr_t MPI_Offset;
 
 #include <sumi-mpi/mpi_integers.h>
 #include <sumi-mpi/mpi_status.h>
