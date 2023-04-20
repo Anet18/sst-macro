@@ -111,11 +111,24 @@ FatTreeRouter::FatTreeRouter(
 void
 FatTreeRouter::route(Packet* pkt) {
   header* hdr = pkt->rtrHeader<header>();
+  long long int  *hops = ft_->hop_array();
+    long long int *ql = ft_->q_l_array();
   SwitchId dst = pkt->toaddr() / ft_->concentration();
 
   // already there
   if (dst == my_addr_){
     hdr->deadlock_vc = 0;
+
+    if(hdr->st==0){
+       *(hops+0)= *(hops+0)+1;
+     }else{
+       *(hops+hdr->st)= *(hops+hdr->st)+1;
+     }
+    
+    int e_port = pkt->toaddr() % ft_->concentration() + ft_->upPortsPerLeafSwitch();
+    hdr->q_length=hdr->q_length+netsw_->queueLength(e_port, all_vcs);
+           *(ql+hdr->q_length)= *(ql+hdr->q_length)+1;
+
     hdr->edge_port = pkt->toaddr() % ft_->concentration() + ft_->upPortsPerLeafSwitch();
     rter_debug("Ejecting %s from switch %d on port %d",
                pkt->toString().c_str(), dst, int(hdr->edge_port));
@@ -123,25 +136,37 @@ FatTreeRouter::route(Packet* pkt) {
     int dst_tree = ft_->subtree(dst);
     if (my_row_ == 0){ //leat switch - going up
       //definitely have to go up since we didn't eject
-      hdr->edge_port = getUpPort();
+      hdr->st=hdr->st+1;
+      int e_port= getUpPort();
+      hdr->q_length=hdr->q_length+netsw_->queueLength(e_port, all_vcs);
+      hdr->edge_port = e_port;
       hdr->deadlock_vc = 0;
       rter_debug("fat_tree: routing up to get to s=%d through l=1 from s=%d,l=0",
                 int(dst), int(my_addr_));
     } else if (my_row_ == 2){     // definitely have to go down
-      hdr->edge_port = getDownPort(dst_tree);
+      hdr->st=hdr->st+1;
+      int e_port = getDownPort(dst_tree);
+      hdr->q_length=hdr->q_length+netsw_->queueLength(e_port, all_vcs);
+      hdr->edge_port = e_port;
       hdr->deadlock_vc = 0;
       rter_debug("fat_tree: routing down to get to s=%d through l=1 from s=%d,l=2",
                 int(dst), int(my_addr_));
     } else if (my_row_ == 1){ // aggregator level, can go either way
       // in the right tree, going down
       if (dst_tree == my_tree_) {
+        hdr->st=hdr->st+1;
         int dst_leaf = dst % ft_->leafSwitchesPerSubtree();
-        hdr->edge_port = getDownPort(dst_leaf);
+        int e_port = getDownPort(dst_leaf);
+        hdr->q_length=hdr->q_length+netsw_->queueLength(e_port, all_vcs);
+        hdr->edge_port = e_port;
         hdr->deadlock_vc = 0;
         rter_debug("fat_tree: routing down to get to s=%d,l=0 from s=%d,l=1",
                   int(dst), int(my_addr_));
       } else { //nope, have to go to core to hop over to other tree
-        hdr->edge_port = getUpPort();
+        hdr->st=hdr->st+1;
+        int e_port = getUpPort();
+        hdr->q_length=hdr->q_length+netsw_->queueLength(e_port, all_vcs);
+        hdr->edge_port = e_port;
         hdr->deadlock_vc = 0;
         rter_debug("fat_tree: routing up to get to s=%d through l=2 from s=%d,l=1",
                   int(dst), int(my_addr_));

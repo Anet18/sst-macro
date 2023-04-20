@@ -316,7 +316,6 @@ class adaptive_multipath_router : public uniform_multipath_router {
 		{
                          *x1=*x1+1;
 			//calculate all the edge ports on minimal path
-                     *(hops+min_path.size()-1)= *(hops+min_path.size()-1)+1;
 		    for(int i=0;i<min_path.size()-1;i++)//we need to discard destination switch thats why min_path.size()-1
 		    {
 			    std::vector<Topology::Connection> con;
@@ -334,7 +333,6 @@ class adaptive_multipath_router : public uniform_multipath_router {
 		{
                          *y1=*y1+1;
 			//calculate all the edge ports on non-minimal path
-                        *(hops+non_min_path.size()-1)= *(hops+non_min_path.size()-1)+1;
 		    for(int i=0;i<non_min_path.size()-1;i++)//we need to discard destination switch thats why non_min_path.size()-1
 		    {
 			    std::vector<Topology::Connection> con;
@@ -353,7 +351,6 @@ class adaptive_multipath_router : public uniform_multipath_router {
         {
                      *x1=*x1+1;
 			//calculate all the edge ports on minimal path
-                       *(hops+min_path.size()-1)= *(hops+min_path.size()-1)+1;
 		    for(int i=0;i<min_path.size()-1;i++)//we need to discard destination switch thats why min_path.size()-1
 		    {
 			    std::vector<Topology::Connection> con;
@@ -372,14 +369,12 @@ class adaptive_multipath_router : public uniform_multipath_router {
 		hdr->deadlock_vc = 0;
         hdr->stage_number = intermediate_stage;
         hdr->index = initial_stage;
-        hdr->q_length=hdr->q_length+netsw_->queueLength(hdr->port_array[hdr->index], all_vcs);
         hdr->edge_port= hdr->port_array[hdr->index];
         hdr->index++;
 
 	}
 	else //intermediate router
-	{
-        hdr->q_length=hdr->q_length+netsw_->queueLength(hdr->port_array[hdr->index], all_vcs);           
+	{           
         hdr->edge_port= hdr->port_array[hdr->index];
 		hdr->index++;
 		hdr->deadlock_vc = hdr->deadlock_vc+1;

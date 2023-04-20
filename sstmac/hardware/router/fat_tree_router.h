@@ -59,7 +59,7 @@ namespace hw {
  */
 class FatTreeRouter : public Router
 {
-  using header = Packet::Header;
+  //using header = Packet::Header;
  public:
   SST_ELI_REGISTER_DERIVED(
     Router,
@@ -68,6 +68,11 @@ class FatTreeRouter : public Router
     "fat_tree",
     SST_ELI_ELEMENT_VERSION(1,0,0),
     "router implementing fat tree routing")
+
+   struct header : public Packet::Header {
+    uint8_t q_length=0;
+    uint8_t st=0;
+  };
 
   FatTreeRouter(SST::Params& params, Topology* top, NetworkSwitch* netsw);
 
