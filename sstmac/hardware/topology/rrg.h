@@ -50,6 +50,8 @@ Questions? Contact sst-macro-help@sandia.gov
 
 #include <sstmac/hardware/topology/structured_topology.h>
 
+//typedef long long int (*mytype)[10];
+
 namespace sstmac {
 namespace hw {
 
@@ -66,8 +68,23 @@ class rrg :public StructuredTopology
     "rrg",
     "Random Regular Graph topology")
   int xwe; 
+  long long  int hops_array[10]={0};
+  long long int ql_array[100]={0};
   long long int x13=0;
   long long int y13=0;
+
+    long long int* hop_array()
+    {
+        long long int *p = hops_array;
+       return p;
+    }
+
+long long int* q_l_array()
+    {
+        long long int *ql = ql_array;
+       return ql;
+    }
+
 
   long long int* total_minimal_path()
    {
@@ -89,6 +106,16 @@ class rrg :public StructuredTopology
   {
       printf("Total Number of Global Minimal Path = %lld\n",x13);
       printf("Total Number of Global Non-Minimal Path = %lld\n",y13);
+     for(int i=0;i<10;i++)
+     {
+          printf("Number of packets traversing %d hops = %lld\n",i,hops_array[i]);
+     }
+    
+     for(int i=0;i<100;i++)
+     {
+          printf("Number of packets wait time equal %d = %lld\n",i,ql_array[i]);
+     }
+
 
   }
   

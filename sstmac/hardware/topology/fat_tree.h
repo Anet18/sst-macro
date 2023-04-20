@@ -67,6 +67,35 @@ class FatTree :
     "fat_tree",
     "implements a fat-tree, with possible tapering")
 
+  long long  int hops_array[10]={0};
+  long long int ql_array[100]={0};
+  long long int x13=0;
+  long long int y13=0;
+
+    long long int* hop_array()
+    {
+        long long int *p = hops_array;
+       return p;
+    }
+
+long long int* q_l_array()
+    {
+        long long int *ql = ql_array;
+       return ql;
+    }
+
+
+  long long int* total_minimal_path()
+   {
+         long long int *x1=&x13;
+         return x1;
+   }
+long long int* total_non_minimal_path()
+   {
+         long long int *y1=&y13;
+         return y1;
+   }
+
   FatTree(SST::Params& params);
 
   typedef enum {
@@ -95,7 +124,20 @@ class FatTree :
     return "fat tree topology";
   }
 
-  ~FatTree() override {}
+  ~FatTree() override {
+   printf("Total Number of Global Minimal Path = %lld\n",x13);
+      printf("Total Number of Global Non-Minimal Path = %lld\n",y13);
+     for(int i=0;i<10;i++)
+     {
+          printf("Number of packets traversing %d hops = %lld\n",i,hops_array[i]);
+     }
+
+     for(int i=0;i<100;i++)
+     {
+          printf("Number of packets wait time equal %d = %lld\n",i,ql_array[i]);
+     }
+
+  }
 
   std::string portTypeName(SwitchId sid, int port) const override;
 

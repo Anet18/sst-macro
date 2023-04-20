@@ -80,6 +80,22 @@ class DragonflyPlus : public Dragonfly
    long long int y13=0;
    long long int z13=0;
    long long int w13=0;
+   //long long  int hops_array[10]={0};
+   //long long int ql_array[100]={0};
+/*
+ long long int* hop_array()
+    {
+        long long int *p = hops_array;
+       return p;
+    }
+
+long long int* q_l_array()
+    {
+        long long int *ql = ql_array;
+       return ql;
+    }
+*/
+
     mytype global_array()
     {
        mytype p = &all_link_state1;
@@ -142,6 +158,18 @@ class DragonflyPlus : public Dragonfly
 	  top_debug("Total Number of Global Non-Minimal Path = %lld",y13);
 	  top_debug("Total Number of Local Up Path = %lld",z13);
 	  top_debug("Total Number of Local Down Path = %lld",w13);
+     /*
+          for(int i=0;i<10;i++)
+     {
+          printf("Number of packets traversing %d hops = %lld\n",i,hops_array[i]);
+     }
+
+     for(int i=0;i<100;i++)
+     {
+          printf("Number of packets wait time equal %d = %lld\n",i,ql_array[i]);
+     }
+    */
+
   }
 
   VTKSwitchGeometry getVtkGeometry(SwitchId sid) const override;
