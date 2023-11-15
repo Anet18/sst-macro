@@ -122,3 +122,5 @@ pp.*
 *.yaml
 
 sstmac_repo.h
+
+*.swp
