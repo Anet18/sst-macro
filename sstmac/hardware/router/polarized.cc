@@ -25,19 +25,20 @@ namespace sstmac {
 namespace hw {
 
 class PolarizedRouter : public Router {
-  //SST_ELI_REGISTER_DERIVED(
-  //  Router,
-  //  PolarizedRouter,
-  //  "macro",
-  //  "polarized",
-  //  SST_ELI_ELEMENT_VERSION(1,0,0),
-  //  "router implementing Polarized routing")
+  public:
+  SST_ELI_REGISTER_DERIVED(
+    Router,
+    PolarizedRouter,
+    "macro",
+    "polarized",
+    SST_ELI_ELEMENT_VERSION(1,0,0),
+    "router implementing Polarized routing")
 
-  private:
   struct header : public Packet::Header {
     // There is a memset to 0 on Packet constructor.
     uint8_t num_hops : 4;
   };
+  private:
   struct Candidate {
     int port;
     int weight_change;
