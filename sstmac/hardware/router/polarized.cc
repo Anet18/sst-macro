@@ -19,18 +19,19 @@ Cristóbal Camarero in collaboration with PNNL.
 #include <sstmac/libraries/nlohmann/json.hpp>
 #include <sstream>
 #include <fstream>
+#include <climits>
 
 namespace sstmac {
 namespace hw {
 
 class PolarizedRouter : public Router {
-  SST_ELI_REGISTER_DERIVED(
-    Router,
-    PolarizedRouter,
-    "macro",
-    "polarized",
-    SST_ELI_ELEMENT_VERSION(1,0,0),
-    "router implementing Polarized routing")
+  //SST_ELI_REGISTER_DERIVED(
+  //  Router,
+  //  PolarizedRouter,
+  //  "macro",
+  //  "polarized",
+  //  SST_ELI_ELEMENT_VERSION(1,0,0),
+  //  "router implementing Polarized routing")
 
   private:
   struct header : public Packet::Header {
@@ -56,7 +57,7 @@ class PolarizedRouter : public Router {
             if(dist>max_base_distance)max_base_distance=dist;
           }
       // Polarized routes are bound by 4D-3 when the diameter is at least 2.
-      switch diameter
+      switch(max_base_distance)
       {
         case 0:
           spkt_abort_printf("diameter is 0??");
@@ -86,7 +87,7 @@ class PolarizedRouter : public Router {
     auto* hdr = pkt->rtrHeader<header>();
     SwitchId dst = topology->endpointToSwitch(pkt->toaddr());
     if (dst == my_addr_){
-      std::vector<InjectionPorts> ports_to_node;
+      std::vector<Topology::InjectionPort> ports_to_node;
       topology->injectionPorts(pkt->toaddr(),ports_to_node);
       int selected_port = 0;//can a node have several ports?
       hdr->edge_port = ports_to_node[selected_port].switch_port;
@@ -105,11 +106,12 @@ class PolarizedRouter : public Router {
       SwitchId neighbour = con.dst;
       int newa = distance(src,neighbour);
       int newb = distance(neighbour,dst);
+      int new_weight = newb - newa;
       bool condition = new_weight <= weight;
-      if new_weight==weight
+      if(new_weight==weight)
       {
-        if(a<b) condition = a<new_a;
-        else condition = new_b<b;
+        if(a<b) condition = a<newa;
+        else condition = newb<b;
       }
       if(condition)
       {
@@ -122,7 +124,8 @@ class PolarizedRouter : public Router {
     int best=-1, best_value=INT_MAX;
     for(int i=0;i<candidates.size();i++)
     {
-      int queue_length = netsw_->queueLength(orig_port, can.port, all_vcs);
+      Candidate& can = candidates[i];
+      int queue_length = netsw_->queueLength(can.port, all_vcs);
       int value = queue_length + penalty[ can.weight_change - min_weight_change ];
       if(value<best_value)
       {
@@ -130,7 +133,7 @@ class PolarizedRouter : public Router {
         best_value=value;
       }
     }
-    hdr->edge_port = candidates[best].orig_port;
+    hdr->edge_port = candidates[best].port;
     hdr->deadlock_vc = hdr->num_hops;
     ++hdr->num_hops;
   }
@@ -142,10 +145,10 @@ class PolarizedRouter : public Router {
   }
   
   private:
-    const Topology* topology;
+    Topology* topology;
     uint8_t longest_path;
     int penalty[3];
-}
+};
 
 }}
 
