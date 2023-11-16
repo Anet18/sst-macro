@@ -182,6 +182,7 @@ libsstmac_hw_la_SOURCES +=  \
   router/cascade_routing.cc \
   router/torus_routing.cc \
   router/rrg_routing.cc \
+  router/polarized.cc \
   topology/star.cc \
   topology/structured_topology.cc \
   topology/cartesian_topology.cc \
