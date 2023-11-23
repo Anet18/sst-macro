@@ -21,6 +21,11 @@ Cristóbal Camarero in collaboration with PNNL.
 #include <fstream>
 #include <climits>
 
+RegisterKeywords{
+{ "penalty", "Employed by Polarized routing to priorize better routes. Array with penalization[index] being a penalization in units of queueLength for candidates in the index position. " },
+{ "compute_distances", "Employed by Polarized routing to compute the distance from Topology::connectedOutports instead of using Topology::numHopsToNode." }
+};
+
 namespace sstmac {
 namespace hw {
 
@@ -48,6 +53,8 @@ class PolarizedRouter : public Router {
     PolarizedRouter(SST::Params& params, Topology* top, NetworkSwitch* netsw)
     : Router(params,top,netsw), topology(top)
     {
+      compute_distances = params.find<bool>("compute_distances",false);
+      if(compute_distances)build_distance_matrix();
       // Compute the diameter.
       SwitchId n = topology->numSwitches();
       int max_base_distance = 0;
@@ -68,10 +75,16 @@ class PolarizedRouter : public Router {
         default:
           longest_path = 4*max_base_distance-3;
       }
-      // TODO: allow to read from configuration.
       penalty[0]=0;
       penalty[0]=64;
       penalty[0]=80;
+      if (params.contains("penalty")) {
+        std::vector<int> pp;
+        params.find_array("penalty",pp);
+        int end=3;
+        if(pp.size()<3)end=pp.size();
+        for(int i=0;i<end;i++)penalty[i]=pp[i];
+      }
     }
   
   // The maximum value the Router promises to write into `packet.rtrHeader()->deadlock_vc`.
@@ -146,13 +159,58 @@ class PolarizedRouter : public Router {
   int distance(SwitchId src, SwitchId dst)
   {
     // We wrap the topology function, to make a potential change to another distance be easier.
-    return topology->numHopsToNode(src,dst);
+    if(compute_distances){
+      uint8_t dist = distance_matrix[src][dst];
+      if(dist==UINT8_MAX)spkt_abort_printf("Switch %d has no path to %d.",src,dst);
+      return dist;
+    } else return topology->numHopsToNode(src,dst);
+  }
+
+  void build_distance_matrix()
+  {
+    distance_matrix.clear();
+    SwitchId n = topology->numSwitches();
+    for(SwitchId src=0;src<n;src++)
+    {
+      //For each source we perform BFS.
+      std::vector<uint8_t> distance_vector(n, UINT8_MAX);
+      distance_vector[src] = 0;
+      SwitchId queue[n];
+      queue[0]=src;
+      int queue_read_index=0;
+      int queue_write_index=1;
+      while(queue_read_index<queue_write_index)
+      {
+        SwitchId current = queue[queue_write_index];
+        queue_read_index++;
+        uint8_t alternative_distance = distance_vector[current];
+        if(alternative_distance==UINT8_MAX)continue;
+        else alternative_distance++;
+        std::vector<Topology::Connection& conns> conns;
+        topology->connectedOutports(current);
+        for(auto con: conns)
+        {
+          SwitchId neighbour = con.dst;
+          if(alternative_distance < distance_vector[neighbour])
+          {
+            distance_vector[neighbour] = alternative_distance;
+            queue[queue_write_index] = neighbour;
+            queue_write_index++;
+          }
+        }
+      }
+      distance_matrix.push_back( distance_vector );
+    }
   }
   
   private:
     Topology* topology;
     uint8_t longest_path;
     int penalty[3];
+    bool compute_distances;
+    /// When the configuration option compute_distance is set to true, distance_matrix[src][dst] will be the computed distance from SwitchId src to dst.
+    /// UINT8_MAX is used for infinite.
+    std::vector<std::vector<uint8_t>> distance_matrix;
 };
 
 }}
