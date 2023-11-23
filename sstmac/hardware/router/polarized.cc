@@ -119,6 +119,10 @@ class PolarizedRouter : public Router {
         candidates.push_back(Candidate{con.src_outport,new_weight-weight});
       }
     }
+    if(candidates.size()==0)
+    {
+        spkt_abort_printf("Got zero Polarized egress candidates for packet %p. hop count=%d. src=%d. current=%d. dst=%d.", packet,hdr->num_hops,src,my_addr_,dst);
+    }
     // Compute a shift that would put the best candidate at the 0 penalty index.
     int min_weight_change = INT_MAX;
     for(auto can: candidates)if(can.weight_change<min_weight_change)min_weight_change=can.weight_change;
