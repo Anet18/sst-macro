@@ -21,10 +21,10 @@ Cristóbal Camarero in collaboration with PNNL.
 #include <fstream>
 #include <climits>
 
-RegisterKeywords{
-{ "penalty", "Employed by Polarized routing to priorize better routes. Array with penalization[index] being a penalization in units of queueLength for candidates in the index position. " },
-{ "compute_distances", "Employed by Polarized routing to compute the distance from Topology::connectedOutports instead of using Topology::numHopsToNode." }
-};
+RegisterKeywords(
+  { "penalty", "Employed by Polarized routing to priorize better routes. Array with penalization[index] being a penalization in units of queueLength for candidates in the index position. " },
+  { "compute_distances", "Employed by Polarized routing to compute the distance from Topology::connectedOutports instead of using Topology::numHopsToNode." }
+);
 
 namespace sstmac {
 namespace hw {
@@ -186,8 +186,8 @@ class PolarizedRouter : public Router {
         uint8_t alternative_distance = distance_vector[current];
         if(alternative_distance==UINT8_MAX)continue;
         else alternative_distance++;
-        std::vector<Topology::Connection& conns> conns;
-        topology->connectedOutports(current);
+        std::vector<Topology::Connection> conns;
+        topology->connectedOutports(current,conns);
         for(auto con: conns)
         {
           SwitchId neighbour = con.dst;
