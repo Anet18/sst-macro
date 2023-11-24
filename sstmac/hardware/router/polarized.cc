@@ -181,7 +181,7 @@ class PolarizedRouter : public Router {
       int queue_write_index=1;
       while(queue_read_index<queue_write_index)
       {
-        SwitchId current = queue[queue_write_index];
+        SwitchId current = queue[queue_read_index];
         queue_read_index++;
         uint8_t alternative_distance = distance_vector[current];
         if(alternative_distance==UINT8_MAX)continue;
